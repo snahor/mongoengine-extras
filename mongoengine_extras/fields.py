@@ -2,8 +2,9 @@ import re
 
 from mongoengine.base import ValidationError
 from mongoengine.fields import StringField
+from mongoengine.python_support import PY3
 from mongoengine import signals
-from mongoengine_extras.utils import slugify
+from .utils import slugify
 
 
 __all__ = ('SlugField', 'AutoSlugField')
@@ -21,11 +22,15 @@ class SlugField(StringField):
 
 
 def create_slug_signal(sender, document):
-    for fieldname, field in document._fields.iteritems():
+    if PY3:
+        fields_iterator = document._fields.items()
+    else:
+        fields_iterator = document._fields.iteritems()
+
+    for fieldname, field in fields_iterator:
         if isinstance(field, AutoSlugField):
             if document.pk and not getattr(field, 'always_update'):
                 continue
-
             document._data[fieldname] = field._generate_slug(
                 document,
                 getattr(document, field.populate_from or fieldname)
