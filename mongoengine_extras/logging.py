@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 from __future__ import absolute_import
 
 from logging import INFO, NOTSET, LogRecord, Formatter, Handler
@@ -72,12 +74,10 @@ class Log(Document):
 
 class MongoEngineFormatter(Formatter):
     def format(self, record):
-        """Formats LogRecord into a MongoEngine Log instance."""
-        
         document = Log(
                 service = record.name,
                 level = record.levelno,
-                message = Formatter.format(self, record),  # TODO: Raw w/ positional if possible.
+                message = Formatter.format(self, record),
                 
                 time = datetime.fromtimestamp(record.created),
                 process = LogRuntime(identifier=record.process, name=record.processName),
@@ -108,8 +108,16 @@ class MongoEngineFormatter(Formatter):
 
 
 class MongoEngineHandler(Handler):
+    """Python standard logging handler to emit MongoEngine documents.
+    
+    Because MongoEngine may not be connected at the point at which logging is configured and the first logging
+    messages emitted this handler will buffer messages until the first successful save.  After the first success
+    any buffered messages will be bulk loaded.
+    
+    It is not the role of this logging handler to connect MongoEngine to your database for you.
+    """
+    
     def __init__(self, level=NOTSET, concern=None, formatter=None, **options):
-        """Setting up mongo handler, initializing mongo database connection via pymongo."""
         super(MongoEngineHandler, self).__init__(level)
         
         self.buffer = []
@@ -118,8 +126,6 @@ class MongoEngineHandler(Handler):
         self.options = options
     
     def emit(self, record):
-        """Inserting new logging record to mongo database."""
-        
         try:
             document = self.format(record)
         except:
@@ -130,7 +136,8 @@ class MongoEngineHandler(Handler):
             
             if self.buffer:
                 Log.objects.insert(self.buffer, load_bulk=False, write_concern=self.concern)
-                self.buffer = None  # Disable buffering of messages after startup.
+            
+            self.buffer = None  # Disable buffering of messages after startup.
         
         except (PyMongoError, ConnectionError, OperationError, NotUniqueError, ValidationError):
             if self.buffer is None:  # Buffering is disabled.
