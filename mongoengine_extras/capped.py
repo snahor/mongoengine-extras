@@ -57,7 +57,7 @@ class CappedQuerySet(QuerySet):
 					end = time()
 					
 				if record is not None:
-					yield record
+					yield self._document._from_son(record, _auto_dereference=self._auto_dereference)
 					last = record['_id']
 				
 				if timeout:
